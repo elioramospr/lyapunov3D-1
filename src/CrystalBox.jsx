@@ -40,7 +40,8 @@ export default function CrystalBox({
 
     <meshPhysicalMaterial
       transmission={1}          
-      thickness={0.5}            
+      thickness={0.5}   
+      color="#dddddd"         
       ior={1.52}                
       roughness={0}              
       metalness={0}             

@@ -35,16 +35,20 @@ const fragmentShader = `
   uniform float uTStep;
   uniform int uSteps;
   uniform float uAlphaMultiplier;
-  uniform  float uBlack;
-  uniform  float uWhite;
-  uniform  float uNoiseLevel;
-  uniform  float uNoiseScale;
-  uniform  float uSpeed;
+  uniform float uBlack;
+  uniform float uWhite;
+  uniform float uNoiseLevel;
+  uniform float uNoiseScale;
+  uniform float uSpeed;
 
   uniform float uArray[MAX_PATTERN];
   uniform int   uPatternLength;
 
   varying vec3 vWorldPosition;
+
+  uniform float uAmbientStrength;
+  uniform vec3 uLightDir;
+  uniform float uDiffuseStrength;
 
     vec3 rainbowPalette(float t) {
     t = clamp(t, 0.0, 1.0);
@@ -106,6 +110,11 @@ const fragmentShader = `
     );
   }
 
+  vec3 redsPalette(float t) {
+    t = clamp(t, 0.0, 1.0);
+    return vec3(t,0.0,0.0);
+  }
+
   vec3 getPaletteColor(float t) {
     if (uPalette == 0) return rainbowPalette(t);
     else if (uPalette == 1) return hotPalette(t);
@@ -113,6 +122,7 @@ const fragmentShader = `
     else if (uPalette == 3) return viridisPalette(t);
     else if (uPalette == 4) return infernoPalette(t);
     else if (uPalette == 5) return coolwarmPalette(t);
+    else if (uPalette == 6) return redsPalette(t);
     else return pastelPalette(t);
   }
 
@@ -294,6 +304,15 @@ const fragmentShader = `
     return sum / float(uIterMax);
   }
 
+  float func3D(vec3 coord){
+    float noise = uNoiseLevel*cnoise(uNoiseScale*coord + uSpeed*uTime);
+    //return (pow(cos(coord.x + noise),3.0) + pow(cos(coord.y + noise),3.0) + pow(cos(coord.z + noise),3.0));
+    //return sin(coord.x)*cos(coord.y) + sin(coord.y)*cos(coord.z) + sin(coord.z)*cos(coord.x);
+    float x = coord.x;
+    float y = coord.y;
+    float z = coord.z;
+    return 2.0*(cos(x)*sin(y) + cos(2.0*y)*sin(z) + cos(z)*sin(1.5*x)) - cos(2.0*x)*cos(2.0*y)*cos(2.0*z);
+    }
 
   // Función auxiliar
   float densityAt(vec3 P) {
@@ -308,6 +327,11 @@ const fragmentShader = `
     return normalize(vec3(dx,dy,dz));
   }
 
+  // float tanh(float x)
+  // {
+  //     float exp_neg_2x = exp(-2.0 * x);
+  //     return -1.0 + 2.0 / (1.0 + exp_neg_2x);
+  // }
 
   void main() {
 
@@ -342,11 +366,31 @@ const fragmentShader = `
         vec3 p      = rayOrigin + t * rayDir;
         vec3 localP = (p + vec3(uDisplaceX, uDisplaceY, uDisplaceZ)) * uZoom;
 
-        float v        = smoothstep(uLypMin, uLypMax, lyapunov3D(localP));
+        //float v        = smoothstep(uLypMin, uLypMax, lyapunov3D(localP));
+        float v = smoothstep(uLypMin,uLypMax,tanh(lyapunov3D(localP)));
         vec3  color    = getPaletteColor(v);
         float alphaSmp = uAlphaMultiplier * v;
 
-     
+        // luz ambiental 
+
+        vec3 ambient = uAmbientStrength*color;
+
+        // sombreado diffuso
+
+        // float eps = 0.005;
+        // vec3 grad = vec3(
+        // lyapunov3D(localP + vec3(eps,0,0)) - lyapunov3D(localP - vec3(eps,0,0)),
+        // lyapunov3D(localP + vec3(0,eps,0)) - lyapunov3D(localP - vec3(0,eps,0)),
+        // lyapunov3D(localP + vec3(0,0,eps)) - lyapunov3D(localP - vec3(0,0,eps))
+        // );
+
+        // vec3 normal = normalize(grad);
+    
+        // float diff = max(dot(normal, normalize(uLightDir)), 0.0);
+        // vec3 diffuse = uDiffuseStrength * diff * color;
+
+        vec3 lighting = ambient;
+
         float dW = distance(color, vec3(1.0));
         float dB = distance(color, vec3(0.0));
 
@@ -355,8 +399,8 @@ const fragmentShader = `
             alphaSmp = 0.0;
         }
 
-
-        colorSum += (1.0 - totalAlpha) * color * alphaSmp;
+             
+        colorSum += (1.0 - totalAlpha) * lighting * alphaSmp;
         totalAlpha += (1.0 - totalAlpha) * alphaSmp;
 
         if (totalAlpha > 0.95) break;
@@ -404,7 +448,11 @@ export default function LyapunovVolume() {
 
     uNoiseLevel,
     uNoiseScale,
-    uSpeed
+    uSpeed,
+
+    uAmbientStrength,
+    uLightDir,
+    uDiffuseStrength,
 
   } = useControls({
     'Transformación espacial': folder({
@@ -437,16 +485,22 @@ export default function LyapunovVolume() {
           Viridis:  3,
           Inferno:  4,
           CoolWarm: 5,
-          Pastel:   6
+          Gray:     6,
+          Pastel:   7
         },
         value: 2
       },
       pattern: { value: 'AAABBCC' }
     }),
     'Ruido': folder({
-      uNoiseLevel: { value: 1, min: 0, max: 2, step: 0.1 },
-      uNoiseScale: { value: 1, min: 0, max: 10, step: 0.1 },
+      uNoiseLevel: { value: 0, min: 0, max: 2, step: 0.1 },
+      uNoiseScale: { value: 0, min: 0, max: 10, step: 0.1 },
       uSpeed: {value: 0,min: 0,max:1,step:0.001}
+    }),
+    'Parámetros de Luz': folder({
+      uAmbientStrength:  { value: 1.0, min: 0, max: 2, step: 0.1 },
+      uLightDir:         { value: new THREE.Vector3(1,1,1).normalize() },
+      uDiffuseStrength:  { value: 1.0, min: 0, max: 2, step: 0.1 },
     }),
 
     
@@ -476,6 +530,9 @@ export default function LyapunovVolume() {
     uNoiseLevel:       { value: uNoiseLevel},
     uNoiseScale:       { value: uNoiseScale},
     uSpeed:            { value: uSpeed},
+    uAmbientStrength:  { value: uAmbientStrength },
+    uLightDir:         { value: new THREE.Vector3()},
+    uDiffuseStrength:  { value: uDiffuseStrength},
   }), [])
 
 
@@ -517,6 +574,10 @@ useFrame(({ clock, camera }) => {
     u.uNoiseLevel.value = uNoiseLevel
     u.uNoiseScale.value = uNoiseScale
     u.uSpeed.value = uSpeed
+
+    u.uAmbientStrength.value = uAmbientStrength
+    u.uLightDir.value = uLightDir
+    u.uDiffuseStrength.value = uDiffuseStrength
 
   })
 

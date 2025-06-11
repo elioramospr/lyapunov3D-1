@@ -86,7 +86,7 @@ export default function Lyapunov3DScene() {
 
           <FrameBox size={frameSize} color={frameColor}> 
             <LyapunovVolume />
-            {/* <CrystalBox /> */}
+            {/* <CrystalBox />  */}
           </FrameBox> 
           </Stage>
 
