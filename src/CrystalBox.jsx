@@ -26,7 +26,7 @@ export default function CrystalBox({
   )
 
  
-  useFrame((state) => {
+  useFrame((state)=> {
     // por si en el futuro quieres un shaderRef.current.uniforms.uTime
   })
 
